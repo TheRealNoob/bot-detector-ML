@@ -10,6 +10,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
 from MachineLearning.data import data_class
+from nice.explainers import NICE
 
 
 class model:
@@ -170,3 +171,31 @@ class model:
 
         df.rename(columns={'Player_id':'id'}, inplace=True)
         return df
+
+    def explainer_fit(self, players: dict, labels: dict, hiscores: data_class) -> None:
+        # preprocess data
+        (train_x, train_y, test_x, test_y) = self.__preprocess(
+            hiscores=hiscores, players=players, labels=labels
+        )
+
+        cat_feat = []
+        num_feat = range(train_x.shape[1])
+
+        predict_fn = lambda x: self.model.predict_proba(x)
+
+        self.explainer = NICE(optimization='sparsity', justified_cf=True)
+        self.explainer.fit(
+            X_train=train_x,
+            predict_fn=predict_fn,
+            y_train=train_y,
+            cat_feat=cat_feat,
+            num_feat=num_feat
+        )
+        return
+    
+    def explain(self, hiscores: data_class):
+        '''explain predictions'''
+        (x, _) = self.__preprocess( hiscores=hiscores, players=None, labels=None)
+        exp = self.explainer(x)
+        print(exp)
+        return exp

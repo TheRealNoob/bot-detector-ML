@@ -164,3 +164,66 @@ async def train(token: str):
     # memory cleanup
     del players, labels, hiscores
     return {'ok': 'ok'}
+
+
+@app.get("/train-explainer")
+async def train_explainer():
+     #TODO: verify token
+    if token != secret_token:
+        raise HTTPException(status_code=404, detail=f"insufficient permissions")
+
+    # request labels
+    url = f'{detector_api}/v1/label?token={token}'
+
+    # logging
+    logging.debug(f'Request: {url=}')
+    data = requests.get(url).json()
+
+    # filter labels
+    labels = [d for d in data if d['label'] in LABELS]
+    
+    # memory cleanup
+    del url, data
+
+    # create an input dict for url
+    label_input = {}
+    label_input['label_id'] = [l['id'] for l in labels]
+    
+    # request all player with label
+    url = f'{detector_api}/v1/player/bulk?token={token}'
+    data = await loop_request(url, label_input)
+
+    # players dict
+    players = data
+
+    # memory cleanup
+    del url, data
+
+    # get all player id's
+    player_input = {}
+    player_input['player_id'] = [int(p['id']) for p in players]
+
+    # request hiscore data latest with player_id
+    url = f'{detector_api}/v1/hiscore/Latest/bulk?token={token}'
+    data = await loop_request(url, player_input)
+
+    # hiscores dict
+    hiscores = data_class(data)
+
+    # memory cleanup
+    del url, data
+
+    ml.explainer_fit(
+        players, labels, hiscores
+    )
+    return {'ok':'ok'}
+
+@app.get("/explainer")
+async def explainer():
+    logging.debug('getting data')
+    url = f'{detector_api}/v1/prediction/data?token={token}&limit=100'
+    logging.debug(url)
+    data = requests.get(url).json()
+    data = data_class(data)
+    ml.explain(data)
+    return {'ok':'ok'}
